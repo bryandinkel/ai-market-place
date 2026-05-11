@@ -15,53 +15,13 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { CATEGORIES } from '@/lib/constants'
+import { createClient } from '@/lib/supabase/server'
 
-// Static seed data for landing page (no DB required for marketing)
-const FEATURED_AGENTS = [
-  {
-    name: 'LeadForge-7',
-    role: 'Lead Generation Specialist',
-    label: 'Fully Autonomous',
-    rating: 4.9,
-    reviews: 142,
-    categories: ['Lead Generation', 'Research'],
-    verified: true,
-    initials: 'LF',
-    color: 'from-violet-500 to-indigo-600',
-  },
-  {
-    name: 'ContentMind',
-    role: 'Content & Copy Agent',
-    label: 'Human Review Included',
-    rating: 4.8,
-    reviews: 89,
-    categories: ['Content', 'Outreach'],
-    verified: true,
-    initials: 'CM',
-    color: 'from-indigo-500 to-blue-600',
-  },
-  {
-    name: 'AutoFlow-X',
-    role: 'Automation Architect',
-    label: 'Sponsor-Approved Delivery',
-    rating: 4.7,
-    reviews: 61,
-    categories: ['Automation'],
-    verified: true,
-    initials: 'AF',
-    color: 'from-purple-500 to-violet-600',
-  },
-  {
-    name: 'ResearchPro',
-    role: 'Market Research Agent',
-    label: 'Fully Autonomous',
-    rating: 4.9,
-    reviews: 203,
-    categories: ['Research'],
-    verified: false,
-    initials: 'RP',
-    color: 'from-blue-500 to-cyan-600',
-  },
+const AGENT_COLORS = [
+  'from-violet-500 to-indigo-600',
+  'from-indigo-500 to-blue-600',
+  'from-purple-500 to-violet-600',
+  'from-blue-500 to-cyan-600',
 ]
 
 const HOW_IT_WORKS = [
@@ -115,7 +75,43 @@ const DIFFERENTIATORS = [
   },
 ]
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createClient()
+
+  // Real stats
+  const [
+    { count: agentCount },
+    { count: listingCount },
+    { data: orderData },
+    { data: ratingData },
+  ] = await Promise.all([
+    supabase.from('seller_identities').select('*', { count: 'exact', head: true }).eq('identity_type', 'agent'),
+    supabase.from('listings').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('orders').select('total_amount').eq('status', 'paid'),
+    supabase.from('listings').select('rating_avg').eq('status', 'active').not('rating_avg', 'is', null),
+  ])
+
+  const totalDelivered = orderData?.reduce((s, o) => s + (o.total_amount ?? 0), 0) ?? 0
+  const avgRating = ratingData?.length
+    ? ratingData.reduce((s, l) => s + Number(l.rating_avg), 0) / ratingData.length
+    : null
+
+  const STATS = [
+    { value: agentCount ? `${agentCount}+` : '—', label: 'Active agents' },
+    { value: listingCount ? `${listingCount}+` : '—', label: 'Listings' },
+    { value: totalDelivered > 0 ? `$${(totalDelivered / 100 / 1000).toFixed(0)}K+` : '—', label: 'Delivered' },
+    { value: avgRating ? `${avgRating.toFixed(1)}★` : '—', label: 'Avg rating' },
+  ]
+
+  // Real featured agents
+  const { data: featuredAgents } = await supabase
+    .from('seller_identities')
+    .select('id, display_name, tagline, identity_type, autonomy_mode, is_verified, rating_avg, rating_count')
+    .eq('identity_type', 'agent')
+    .eq('is_verified', true)
+    .order('rating_avg', { ascending: false })
+    .limit(4)
+
   return (
     <div className="relative">
       {/* Hero radial glow */}
@@ -157,12 +153,7 @@ export default function LandingPage() {
 
         {/* Stats row */}
         <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl mx-auto">
-          {[
-            { value: '200+', label: 'Active agents' },
-            { value: '1,400+', label: 'Listings' },
-            { value: '$2.1M+', label: 'Delivered' },
-            { value: '4.8★', label: 'Avg rating' },
-          ].map(stat => (
+          {STATS.map(stat => (
             <div key={stat.label} className="text-center">
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
@@ -185,52 +176,52 @@ export default function LandingPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {FEATURED_AGENTS.map(agent => (
-            <Link key={agent.name} href="/agents">
-              <Card className="group bg-card border-border hover:border-primary/40 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 cursor-pointer">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                      {agent.initials}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-sm truncate">{agent.name}</span>
-                        {agent.verified && (
-                          <Shield className="w-3.5 h-3.5 text-primary shrink-0" />
-                        )}
+        {featuredAgents && featuredAgents.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {featuredAgents.map((agent, i) => {
+              const initials = agent.display_name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+              return (
+                <Link key={agent.id} href="/agents">
+                  <Card className="group bg-card border-border hover:border-primary/40 transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 cursor-pointer">
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${AGENT_COLORS[i % AGENT_COLORS.length]} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {initials}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm truncate">{agent.display_name}</span>
+                            {agent.is_verified && (
+                              <Shield className="w-3.5 h-3.5 text-primary shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{agent.tagline ?? 'AI Agent'}</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
-                    </div>
-                  </div>
 
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary border-primary/20 mb-3"
-                  >
-                    <Bot className="w-2.5 h-2.5 mr-1" />
-                    {agent.label}
-                  </Badge>
+                      {agent.autonomy_mode && (
+                        <Badge variant="secondary" className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary border-primary/20 mb-3">
+                          <Bot className="w-2.5 h-2.5 mr-1" />
+                          {agent.autonomy_mode.replace(/_/g, ' ')}
+                        </Badge>
+                      )}
 
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {agent.categories.map(cat => (
-                      <span key={cat} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-                        {cat}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-medium text-foreground">{agent.rating}</span>
-                    <span>({agent.reviews} reviews)</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-3">
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        <span className="font-medium text-foreground">{agent.rating_avg ?? '—'}</span>
+                        {agent.rating_count && <span>({agent.rating_count} reviews)</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No verified agents yet — <Link href="/signup" className="text-primary underline">be the first to join</Link>.
+          </div>
+        )}
       </section>
 
       {/* ── CATEGORIES ── */}

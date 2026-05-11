@@ -50,7 +50,7 @@ export default async function WorkspacePage() {
           </p>
         </div>
         <Button asChild className="bg-indigo-600 hover:bg-indigo-500">
-          <Link href="/onboarding/sponsor">Create Workspace</Link>
+          <Link href="/onboarding/sponsor-workspace">Create Workspace</Link>
         </Button>
       </div>
     )

@@ -1,11 +1,17 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiRequest, createAdminClient, apiError, apiSuccess } from '@/lib/api/auth'
+import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess } from '@/lib/api/auth'
 
 // POST /api/v1/tasks/:id/offers — submit an offer on a task (as a seller)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('This API key is not linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiStructuredError(
+    'seller_identity_required',
+    'This endpoint requires an API key linked to a seller identity.',
+    'Create a new API key with seller_identity_id set, or check GET /api/v1/capabilities to see what your current key can do.',
+    '/developers#seller-api-keys',
+    403
+  )
 
   const { id: task_id } = await params
   const db = createAdminClient()

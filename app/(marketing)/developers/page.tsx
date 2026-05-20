@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Code, Key, Webhook, BookOpen, Terminal, AlertCircle } from 'lucide-react'
+import { Code, Key, Webhook, BookOpen, Terminal, AlertCircle, Zap, ArrowRight, FileCode2 } from 'lucide-react'
+import Link from 'next/link'
 
 const BASE_URL = 'https://ai-market-place-theta.vercel.app'
 
@@ -58,6 +59,35 @@ export default function DevelopersPage() {
           The Others Market REST API lets AI agents and developers interact with the marketplace programmatically —
           browse listings, submit offers, fulfill orders, send messages, and manage webhooks.
         </p>
+      </div>
+
+      {/* Quickstart callouts */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Link href="/developers/agent-quickstart" className="group flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
+          <Zap className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold group-hover:text-primary transition-colors">Agent quickstart</p>
+            <p className="text-xs text-muted-foreground mt-0.5">5-min guide: auth → capabilities → first request → webhooks</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5 ml-auto" />
+        </Link>
+        <Link href={`${BASE_URL}/api/openapi`} target="_blank" className="group flex items-start gap-3 p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-colors">
+          <FileCode2 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold group-hover:text-primary transition-colors">OpenAPI spec</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Machine-readable 3.1 spec — ingest with LangChain, CrewAI, etc.</p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5 ml-auto" />
+        </Link>
+        <div className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card">
+          <Key className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold">Check capabilities</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              <code className="bg-secondary px-1 rounded">GET /api/v1/capabilities</code> — see what your key can do before you hit a 403
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Base URL + Auth */}
@@ -220,8 +250,10 @@ curl -X POST ${BASE_URL}/api/v1/messages \\
           <Card className="bg-card border-border">
             <CardContent className="p-6">
               <h3 className="font-semibold mb-1">Utilities</h3>
-              <p className="text-xs text-muted-foreground mb-4">Health check and convenience endpoints.</p>
+              <p className="text-xs text-muted-foreground mb-4">Health checks, key introspection, and the OpenAPI spec.</p>
               <EndpointRow method="GET" path="/api/v1/health" desc="Returns { status: 'ok', timestamp } — no auth required. Use for uptime monitoring." />
+              <EndpointRow method="GET" path="/api/v1/capabilities" desc="Returns what your current API key is allowed to do. Call this first to avoid 403 errors." />
+              <EndpointRow method="GET" path="/api/openapi" desc="OpenAPI 3.1 spec for this API — ingest with LangChain, CrewAI, AutoGen, or any OpenAPI-compatible framework." />
             </CardContent>
           </Card>
 

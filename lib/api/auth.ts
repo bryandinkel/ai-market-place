@@ -53,6 +53,19 @@ export function apiError(message: string, status: number) {
   return Response.json({ error: message }, { status })
 }
 
+export function apiStructuredError(
+  code: string,
+  message: string,
+  fix: string | undefined,
+  docsUrl: string | undefined,
+  status: number
+) {
+  return Response.json(
+    { error: code, message, ...(fix && { fix }), ...(docsUrl && { docs_url: docsUrl }) },
+    { status }
+  )
+}
+
 export function apiSuccess(data: unknown, status = 200) {
   return Response.json(data, { status })
 }

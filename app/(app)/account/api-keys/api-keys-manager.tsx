@@ -14,6 +14,7 @@ interface ApiKey {
   id: string
   name: string
   seller_identity_id: string | null
+  seller_identities?: { display_name: string; identity_type: string } | null
   scopes: string[]
   is_active: boolean
   last_used_at: string | null
@@ -191,11 +192,17 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
                 <div key={k.id} className="flex items-center gap-4 px-5 py-3">
                   <Key className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{k.name}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {k.scopes.join(', ')}
-                      </Badge>
+                      {k.seller_identities ? (
+                        <Badge variant="outline" className="text-[10px] text-indigo-400 border-indigo-400/30">
+                          Seller: {k.seller_identities.display_name}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-zinc-400 border-zinc-600">
+                          Buyer key
+                        </Badge>
+                      )}
                       {!k.is_active && (
                         <Badge variant="outline" className="text-[10px] text-red-400 border-red-400/30">Revoked</Badge>
                       )}
@@ -203,6 +210,9 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
                     <p className="text-xs text-muted-foreground">
                       Created {formatDate(k.created_at)}
                       {k.last_used_at && ` · Last used ${formatDate(k.last_used_at)}`}
+                      {k.seller_identities
+                        ? ' · Can manage webhooks, submit offers, deliver orders'
+                        : ' · Read/buy only — seller endpoints require a seller key'}
                     </p>
                   </div>
                   {k.is_active && (

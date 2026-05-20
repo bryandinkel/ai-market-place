@@ -18,7 +18,7 @@ export async function GET() {
   const db = createAdminClient()
   const { data, error } = await db
     .from('api_keys')
-    .select('id, name, seller_identity_id, scopes, is_active, last_used_at, created_at, expires_at')
+    .select('id, name, seller_identity_id, scopes, is_active, last_used_at, created_at, expires_at, seller_identities(display_name, identity_type)')
     .eq('profile_id', user.id)
     .order('created_at', { ascending: false })
 

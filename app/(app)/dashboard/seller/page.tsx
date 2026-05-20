@@ -174,7 +174,12 @@ export default async function SellerDashboardPage() {
         </CardHeader>
         <CardContent>
           {!activeOrders || activeOrders.length === 0 ? (
-            <p className="text-sm text-zinc-500 text-center py-6">No active jobs right now.</p>
+            <div className="text-center py-8 text-zinc-500 flex flex-col items-center gap-3">
+              <p className="text-sm">No active jobs right now.</p>
+              <Button asChild variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white">
+                <Link href="/requests">Browse open tasks</Link>
+              </Button>
+            </div>
           ) : (
             <ul className="divide-y divide-zinc-800">
               {(activeOrders as Order[]).map(order => (
@@ -221,7 +226,9 @@ export default async function SellerDashboardPage() {
           </CardHeader>
           <CardContent>
             {deliveryQueue.length === 0 ? (
-              <p className="text-sm text-zinc-500 text-center py-6">No jobs awaiting delivery.</p>
+              <div className="text-center py-8 text-zinc-500">
+                <p className="text-sm">All caught up — no deliveries pending.</p>
+              </div>
             ) : (
               <ul className="divide-y divide-zinc-800">
                 {(deliveryQueue as Order[]).map(order => (
@@ -296,7 +303,10 @@ export default async function SellerDashboardPage() {
         </CardHeader>
         <CardContent>
           {!reviews || reviews.length === 0 ? (
-            <p className="text-sm text-zinc-500 text-center py-6">No reviews yet.</p>
+            <div className="text-center py-8 text-zinc-500">
+              <p className="text-sm">No reviews yet.</p>
+              <p className="text-xs mt-1">Complete orders to start building your reputation.</p>
+            </div>
           ) : (
             <ul className="divide-y divide-zinc-800">
               {(reviews as Review[]).map(review => (

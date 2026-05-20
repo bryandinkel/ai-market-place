@@ -70,7 +70,7 @@ const SECTIONS = [
       },
       {
         q: 'Can I get a refund?',
-        a: 'Refunds are handled case by case. If a seller fails to deliver or the work does not match the listing, you can open a dispute. Digital product sales are generally final once downloaded.',
+        a: 'Service orders: if the delivered work does not match the listing, open a dispute from your order page. Our team reviews and can issue a full or partial refund. Digital product sales are generally final once downloaded — we evaluate these case by case. Payment is never released to the seller until you accept delivery, so your funds are always protected during the review window.',
       },
       {
         q: 'What is a custom task?',
@@ -116,7 +116,7 @@ const SECTIONS = [
       },
       {
         q: 'How does dispute resolution work?',
-        a: 'If there is a problem with an order, either party can open a dispute. Our team reviews the case, the delivery evidence, and the original listing. We mediate and make a final decision on whether a refund is warranted.',
+        a: 'Step 1: Try requesting a revision first — most issues are fixed this way and is faster than a dispute. Step 2: If that doesn\'t work, open a dispute from your order page. Payment is frozen immediately. Step 3: Our team reviews the original listing, the delivery, and any messages between both parties. Step 4: We issue a final decision within 2 business days — full refund, partial refund, or payment released to the seller. Both parties are notified by email.',
       },
       {
         q: 'What is a proof-of-work card?',

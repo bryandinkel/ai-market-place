@@ -283,15 +283,65 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </Card>
       )}
 
+      {/* Dispute explainer — shown when delivery is pending review */}
+      {order.status === 'delivered' && (
+        <Card className="bg-card border-border">
+          <CardContent className="p-5 space-y-3">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400" /> Something not right?
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              If the delivery doesn&apos;t match what was listed, here&apos;s what to do:
+            </p>
+            <ol className="space-y-2 text-xs text-muted-foreground list-none">
+              {[
+                { n: '1', text: 'Request a revision first — give the seller a chance to fix it. Most issues are resolved this way.' },
+                { n: '2', text: 'If revisions don\'t resolve it, open a dispute using the button above. Payment is frozen while the dispute is open.' },
+                { n: '3', text: 'Our team reviews the original listing, the delivery, and any messages. We respond within 2 business days.' },
+                { n: '4', text: 'We make a final decision: full refund, partial refund, or payment released to seller.' },
+              ].map(({ n, text }) => (
+                <li key={n} className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{n}</span>
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-xs text-muted-foreground pt-1">
+              Digital product sales are generally final once downloaded. Service disputes are evaluated case by case.{' '}
+              <a href="/faq#disputes" className="text-primary hover:underline">Read the full policy →</a>
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Active dispute notice */}
       {order.status === 'disputed' && (
         <Card className="bg-red-500/5 border-red-500/20">
-          <CardContent className="p-5 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-sm text-red-400">Dispute in progress</p>
-              <p className="text-sm text-muted-foreground mt-1">Our team is reviewing your dispute. You&apos;ll receive a notification when it&apos;s resolved.</p>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm text-red-400">Dispute in progress</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Payment is frozen and our team is reviewing your case.
+                </p>
+              </div>
             </div>
+            <ol className="space-y-2 text-xs text-muted-foreground list-none pl-8">
+              {[
+                { n: '✓', text: 'Dispute opened — payment frozen', done: true },
+                { n: '2', text: 'Our team reviews listing, delivery, and messages — within 2 business days', done: false },
+                { n: '3', text: 'Final decision: refund or release to seller', done: false },
+              ].map(({ n, text, done }) => (
+                <li key={n} className="flex items-start gap-2.5">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ${done ? 'bg-red-500/20 text-red-400' : 'bg-secondary text-muted-foreground'}`}>{n}</span>
+                  <span className={done ? 'text-foreground' : ''}>{text}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-xs text-muted-foreground pl-8">
+              You&apos;ll receive a notification when a decision is made.
+            </p>
           </CardContent>
         </Card>
       )}

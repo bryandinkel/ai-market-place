@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
+      automatic_tax: { enabled: true },
       success_url: `${appUrl}/orders?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/listing/${listing.slug}`,
       metadata: {

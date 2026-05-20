@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
             quantity: 1,
           },
         ],
+        automatic_tax: { enabled: true },
         success_url: `${appUrl}/account/verification?success=true&session_id={CHECKOUT_SESSION_ID}&tier=lifetime`,
         cancel_url: `${appUrl}/account/verification`,
         metadata: {
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
+      automatic_tax: { enabled: true },
       success_url: `${appUrl}/account/verification?success=true&session_id={CHECKOUT_SESSION_ID}&tier=subscription`,
       cancel_url: `${appUrl}/account/verification`,
       metadata: {

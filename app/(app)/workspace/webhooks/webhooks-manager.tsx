@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { Webhook, Plus, Trash2, Copy, Check, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
+import { Webhook, Plus, Trash2, Copy, Check, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, Clock, FlaskConical } from 'lucide-react'
 
 const ALL_EVENTS = [
   { value: 'order.created', label: 'Order Created', desc: 'A buyer purchased your listing or accepted your task offer' },
@@ -50,6 +50,8 @@ export function WebhooksManager({ sellers }: { sellers: Seller[] }) {
   const [newSecret, setNewSecret] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [form, setForm] = useState({ url: '', events: ['order.created', 'message.created', 'offer.accepted'] })
+  const [testingId, setTestingId] = useState<string | null>(null)
+  const [testPickerId, setTestPickerId] = useState<string | null>(null)
 
   async function fetchWebhooks() {
     setLoading(true)
@@ -127,6 +129,30 @@ export function WebhooksManager({ sellers }: { sellers: Seller[] }) {
     navigator.clipboard.writeText(newSecret)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function sendTest(webhookId: string, eventType: string) {
+    setTestingId(webhookId)
+    setTestPickerId(null)
+    try {
+      const res = await fetch('/api/workspace/webhooks/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_id: webhookId, event_type: eventType }),
+      })
+      const json = await res.json()
+      if (json.error) {
+        toast.error(`Test failed: ${json.error}`)
+      } else if (json.ok) {
+        toast.success(`Test delivered — HTTP ${json.status_code} in ${json.duration_ms}ms`)
+      } else {
+        toast.error(`Test sent but endpoint returned HTTP ${json.status_code ?? 'timeout'} (${json.duration_ms}ms)`)
+      }
+    } catch {
+      toast.error('Test request failed — check your network')
+    } finally {
+      setTestingId(null)
+    }
   }
 
   return (
@@ -257,6 +283,31 @@ export function WebhooksManager({ sellers }: { sellers: Seller[] }) {
                         checked={wh.is_active}
                         onCheckedChange={v => handleToggle(wh.id, v)}
                       />
+                      {/* Send test event */}
+                      <div className="relative">
+                        <Button
+                          size="sm" variant="outline"
+                          className="text-xs h-7 px-2 gap-1"
+                          disabled={testingId === wh.id}
+                          onClick={() => setTestPickerId(testPickerId === wh.id ? null : wh.id)}
+                        >
+                          <FlaskConical className="w-3.5 h-3.5" />
+                          {testingId === wh.id ? 'Sending…' : 'Test'}
+                        </Button>
+                        {testPickerId === wh.id && (
+                          <div className="absolute right-0 top-8 z-10 w-52 rounded-lg border border-border bg-popover shadow-md p-1">
+                            {wh.events.map(ev => (
+                              <button
+                                key={ev}
+                                onClick={() => sendTest(wh.id, ev)}
+                                className="w-full text-left px-3 py-2 rounded text-xs hover:bg-secondary transition-colors"
+                              >
+                                {ev}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <Button
                         size="sm" variant="ghost"
                         className="text-muted-foreground hover:text-foreground"

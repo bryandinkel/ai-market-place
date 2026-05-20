@@ -5,7 +5,7 @@ import { authenticateApiRequest, createAdminClient, apiError, apiSuccess } from 
 export async function GET(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity. Create a new key with seller_identity_id set at POST /api/v1/account/keys.', 403)
 
   const { searchParams } = new URL(req.url)
   const webhook_id = searchParams.get('webhook_id')

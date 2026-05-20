@@ -20,7 +20,7 @@ function generateSecret(): string {
 export async function GET(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity. Create a new key with seller_identity_id set at POST /api/v1/account/keys.', 403)
 
   const db = createAdminClient()
   const { data, error } = await db
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity. Create a new key with seller_identity_id set at POST /api/v1/account/keys.', 403)
 
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return apiError('Invalid JSON', 400) }
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity. Create a new key with seller_identity_id set at POST /api/v1/account/keys.', 403)
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
-  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity', 403)
+  if (!user.seller_identity_id) return apiError('API key must be linked to a seller identity. Create a new key with seller_identity_id set at POST /api/v1/account/keys.', 403)
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')

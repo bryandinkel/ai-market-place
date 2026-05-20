@@ -19,6 +19,9 @@ import {
   CheckCircle2,
   Cpu,
   UserCircle,
+  Zap,
+  Lock,
+  FileCheck,
 } from 'lucide-react'
 
 interface SellerPageProps {
@@ -36,6 +39,14 @@ const FULFILLMENT_LABELS: Record<string, { label: string; color: string }> = {
   human_review_included: { label: 'Human Review Included', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   sponsor_approved_delivery: { label: 'Sponsor-Approved Delivery', color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' },
   hybrid_fulfillment: { label: 'Hybrid Fulfillment', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+}
+
+const ACTION_LABELS: Record<string, { label: string; desc: string }> = {
+  purchase:       { label: 'Accept orders',      desc: 'Take on new orders from buyers' },
+  accept_job:     { label: 'Accept task offers', desc: 'Respond to custom task requests' },
+  final_delivery: { label: 'Deliver work',       desc: 'Submit completed work to buyers' },
+  refund_cancel:  { label: 'Refund / cancel',    desc: 'Issue refunds or cancel orders' },
+  messaging:      { label: 'Send messages',      desc: 'Communicate with buyers directly' },
 }
 
 const IDENTITY_BADGE: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -95,8 +106,8 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
   const seller = sellerData as SellerIdentity & { agent_profiles?: AgentProfile[] }
   const agentProfile = seller.agent_profiles?.[0] ?? null
 
-  // Fetch active listings and recent reviews in parallel
-  const [{ data: listingsData }, { data: reviewsData }, sponsorWorkspace] = await Promise.all([
+  // Fetch active listings, reviews, approval rules, and proof-of-work in parallel
+  const [{ data: listingsData }, { data: reviewsData }, sponsorWorkspace, { data: approvalRulesData }, { data: proofOfWorkData }] = await Promise.all([
     supabase
       .from('listings')
       .select(`
@@ -129,12 +140,38 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
           .single()
           .then((r) => r.data as SponsorWorkspace | null)
       : Promise.resolve(null),
+    // Approval rules — only exist for agents
+    agentProfile
+      ? supabase
+          .from('agent_approval_rules')
+          .select('action, requires_approval')
+          .eq('agent_profile_id', agentProfile.id)
+      : Promise.resolve({ data: [] }),
+    // Proof-of-work from completed orders (public via migration 004)
+    supabase
+      .from('proof_of_work_cards')
+      .select(`
+        id, fulfillment_mode_label, summary, created_at,
+        deliveries (
+          orders (seller_identity_id)
+        )
+      `)
+      .eq('deliveries.orders.seller_identity_id', seller.id)
+      .order('created_at', { ascending: false })
+      .limit(3),
   ])
 
   const listings = (listingsData ?? []) as unknown as ListingWithSeller[]
   const reviews = (reviewsData ?? []) as Array<
     Review & { profiles: Pick<Profile, 'display_name' | 'avatar_url'> }
   >
+  const approvalRules = (approvalRulesData ?? []) as Array<{ action: string; requires_approval: boolean }>
+  const proofOfWork = (proofOfWorkData ?? []).filter((p: Record<string, unknown>) => {
+    // Only show cards where the delivery's order belongs to this seller
+    const delivery = p.deliveries as Record<string, unknown> | null
+    const order = delivery?.orders as Record<string, unknown> | null
+    return order?.seller_identity_id === seller.id
+  }) as Array<{ id: string; fulfillment_mode_label: string; summary: string; created_at: string }>
 
   const isVerified = seller.verification_status === 'approved'
   const identityBadge = IDENTITY_BADGE[seller.identity_type]
@@ -303,6 +340,41 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
               </Card>
             )}
 
+            {/* Agent capabilities card */}
+            {agentProfile && approvalRules.length > 0 && (
+              <Card className="bg-card border-border">
+                <CardContent className="p-5 space-y-3">
+                  <h2 className="text-sm font-semibold">Capabilities</h2>
+                  <p className="text-xs text-muted-foreground">What this agent can do autonomously vs. what requires sponsor approval.</p>
+                  <ul className="space-y-2">
+                    {approvalRules.map(rule => {
+                      const meta = ACTION_LABELS[rule.action] ?? { label: rule.action, desc: '' }
+                      const autonomous = !rule.requires_approval
+                      return (
+                        <li key={rule.action} className="flex items-start gap-2.5">
+                          <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${autonomous ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                            {autonomous
+                              ? <Zap className="w-3 h-3 text-emerald-400" />
+                              : <Lock className="w-3 h-3 text-amber-400" />
+                            }
+                          </div>
+                          <div>
+                            <p className={`text-xs font-medium ${autonomous ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {meta.label}
+                              <span className="ml-1.5 font-normal text-muted-foreground">
+                                — {autonomous ? 'autonomous' : 'sponsor approval'}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">{meta.desc}</p>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Stats */}
             <Card className="bg-card border-border">
               <CardContent className="p-5">
@@ -421,6 +493,38 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
                 </Card>
               )}
             </section>
+            {/* Proof of work */}
+            {proofOfWork.length > 0 && (
+              <>
+                <Separator />
+                <section>
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <FileCheck className="w-5 h-5 text-primary" />
+                    Proof of Work
+                    <span className="text-sm font-normal text-muted-foreground ml-1">
+                      from completed orders
+                    </span>
+                  </h2>
+                  <div className="space-y-3">
+                    {proofOfWork.map(card => (
+                      <Card key={card.id} className="bg-card border-border">
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-primary border-primary/30 text-xs">
+                              {card.fulfillment_mode_label}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(card.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{card.summary}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         </div>
       </div>

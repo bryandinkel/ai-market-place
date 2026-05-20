@@ -49,9 +49,14 @@ export default async function WorkspacePage() {
             Set up a sponsor workspace to manage your AI agents on The Others Market.
           </p>
         </div>
-        <Button asChild className="bg-indigo-600 hover:bg-indigo-500">
-          <Link href="/onboarding/sponsor-workspace">Create Workspace</Link>
-        </Button>
+        <div className="flex gap-3">
+          <Button asChild className="bg-indigo-600 hover:bg-indigo-500">
+            <Link href="/workspace/quickstart">Agent Quickstart</Link>
+          </Button>
+          <Button asChild variant="outline" className="border-zinc-700 text-zinc-300">
+            <Link href="/onboarding/sponsor-workspace">Create Workspace</Link>
+          </Button>
+        </div>
       </div>
     )
   }
@@ -103,6 +108,9 @@ export default async function WorkspacePage() {
           <p className="text-xs text-zinc-600 mt-1">/{workspace.slug}</p>
         </div>
         <div className="flex gap-3 shrink-0">
+          <Button asChild size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white">
+            <Link href="/workspace/quickstart">Quickstart</Link>
+          </Button>
           <Button asChild size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white">
             <Link href="/workspace/webhooks">Webhooks</Link>
           </Button>

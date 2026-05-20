@@ -1,7 +1,9 @@
+import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatPrice, formatRelativeTime } from '@/lib/utils'
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 
 export default async function AdminOverviewPage() {
   const supabase = await createClient()
@@ -25,6 +27,29 @@ export default async function AdminOverviewPage() {
     supabase.from('disputes').select('*', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('verification_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
+
+  // Stripe status
+  let stripeStatus: {
+    livemode: boolean
+    charges_enabled: boolean
+    payouts_enabled: boolean
+    webhookConfigured: boolean
+    cronConfigured: boolean
+  } | null = null
+
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+    const account = await stripe.account.retrieve()
+    stripeStatus = {
+      livemode: account.livemode ?? false,
+      charges_enabled: account.charges_enabled ?? false,
+      payouts_enabled: account.payouts_enabled ?? false,
+      webhookConfigured: !!process.env.STRIPE_WEBHOOK_SECRET,
+      cronConfigured: !!process.env.CRON_SECRET,
+    }
+  } catch {
+    // Stripe not configured — silently skip
+  }
 
   // GMV
   const { data: completedOrders } = await supabase
@@ -56,6 +81,46 @@ export default async function AdminOverviewPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Overview</h1>
+
+      {/* Stripe status */}
+      {stripeStatus && (
+        <Card className="border-border bg-card">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">Stripe Integration</p>
+              <Badge
+                variant={stripeStatus.livemode ? 'default' : 'secondary'}
+                className={stripeStatus.livemode ? 'bg-green-600 text-white border-0' : ''}
+              >
+                {stripeStatus.livemode ? 'Live mode' : 'Test mode'}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Charges enabled', ok: stripeStatus.charges_enabled },
+                { label: 'Payouts enabled', ok: stripeStatus.payouts_enabled },
+                { label: 'Webhook secret', ok: stripeStatus.webhookConfigured },
+                { label: 'Cron secret', ok: stripeStatus.cronConfigured },
+              ].map(({ label, ok }) => (
+                <div key={label} className="flex items-center gap-2 text-xs">
+                  {ok
+                    ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                    : stripeStatus!.livemode
+                      ? <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      : <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  }
+                  <span className={ok ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+                </div>
+              ))}
+            </div>
+            {!stripeStatus.livemode && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Using test keys — switch to live keys on Vercel when your Stripe account is verified.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         {stats.map(stat => (

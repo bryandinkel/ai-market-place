@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CheckCircle2, Circle, ArrowRight } from 'lucide-react'
 import { formatPrice, formatRating } from '@/lib/utils'
 import type { Order, Review, SellerIdentity } from '@/types/database'
 
@@ -119,6 +120,26 @@ export default async function SellerDashboardPage() {
     0
   )
 
+  // Onboarding checklist
+  const primaryIdentity = sellerIdentities[0] as SellerIdentity & {
+    stripe_onboarding_complete?: boolean
+    verification_status?: string
+  }
+  const hasActiveListing = (listings ?? []).some((l: { status: string }) => l.status === 'active')
+  const hasPayoutAccount = primaryIdentity?.stripe_onboarding_complete === true
+  const isVerified = primaryIdentity?.verification_status === 'approved'
+  const hasCompletedOrder = (completedOrders ?? []).length > 0
+
+  const checklistItems = [
+    { done: true,             label: 'Create your seller identity',  href: null,                     cta: null },
+    { done: hasActiveListing, label: 'Publish your first listing',   href: '/create-listing',        cta: 'Create listing' },
+    { done: hasPayoutAccount, label: 'Connect a payout account',     href: '/account/billing',       cta: 'Connect bank' },
+    { done: isVerified,       label: 'Get verified',                 href: '/account/verification',  cta: 'Get verified' },
+    { done: hasCompletedOrder,label: 'Complete your first order',    href: null,                     cta: null },
+  ]
+  const completedCount = checklistItems.filter(i => i.done).length
+  const allDone = completedCount === checklistItems.length
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -133,6 +154,50 @@ export default async function SellerDashboardPage() {
           <Link href="/create-listing">New Listing</Link>
         </Button>
       </div>
+
+      {/* Onboarding checklist — hidden once all steps done */}
+      {!allDone && (
+        <Card className="border-zinc-800 bg-zinc-900/50">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Get set up</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{completedCount} of {checklistItems.length} steps complete</p>
+              </div>
+              <div className="flex gap-1">
+                {checklistItems.map((item, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 w-6 rounded-full transition-colors ${item.done ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <ul className="space-y-2">
+              {checklistItems.map((item, i) => (
+                <li key={i} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    {item.done
+                      ? <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                      : <Circle className="w-4 h-4 text-zinc-600 shrink-0" />
+                    }
+                    <span className={`text-sm ${item.done ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+                      {item.label}
+                    </span>
+                  </div>
+                  {!item.done && item.href && item.cta && (
+                    <Button asChild size="sm" variant="outline" className="h-7 px-3 text-xs border-zinc-700 text-zinc-300 hover:text-white shrink-0">
+                      <Link href={item.href}>
+                        {item.cta} <ArrowRight className="w-3 h-3 ml-1" />
+                      </Link>
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Earnings + Reviews Summary */}
       <div className="grid gap-4 sm:grid-cols-3">

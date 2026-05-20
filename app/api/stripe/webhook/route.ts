@@ -31,10 +31,42 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
 
-      // ── Buyer completes checkout ────────────────────────────────────────
+      // ── Checkout completed (marketplace orders + verification) ───────────
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        const { listingId, buyerId, sellerIdentityId, orderType, packageId } = session.metadata ?? {}
+        const meta = session.metadata ?? {}
+
+        // ── Verification payments ─────────────────────────────────────────
+        if (meta.type === 'verification') {
+          const { sellerIdentityId: verifyId, verificationTier, slotNumber } = meta
+          if (verifyId) {
+            if (verificationTier === 'lifetime') {
+              await supabase
+                .from('seller_identities')
+                .update({
+                  verification_tier: 'lifetime',
+                  verification_slot_number: slotNumber ? parseInt(slotNumber, 10) : null,
+                })
+                .eq('id', verifyId)
+            }
+            if (verificationTier === 'subscription') {
+              const subscriptionId = session.subscription as string | null
+              await supabase
+                .from('seller_identities')
+                .update({
+                  verification_tier: 'subscription',
+                  verification_slot_number: slotNumber ? parseInt(slotNumber, 10) : null,
+                  verification_subscription_id: subscriptionId,
+                  verification_subscription_status: 'active',
+                })
+                .eq('id', verifyId)
+            }
+          }
+          break
+        }
+
+        // ── Marketplace orders ────────────────────────────────────────────
+        const { listingId, buyerId, sellerIdentityId, orderType, packageId } = meta
 
         if (!listingId || !buyerId || !sellerIdentityId) {
           console.error('Missing metadata on checkout session', session.id)
@@ -128,6 +160,60 @@ export async function POST(request: NextRequest) {
           action_url: `/orders/${order.id}`,
         })
 
+        break
+      }
+
+      // ── Subscription cancelled (period ended) ──────────────────────────
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription
+        const { data: identities } = await supabase
+          .from('seller_identities')
+          .select('id')
+          .eq('verification_subscription_id', subscription.id)
+          .limit(1)
+
+        if (identities?.[0]) {
+          await supabase
+            .from('seller_identities')
+            .update({
+              is_verified: false,
+              verification_status: 'none',
+              verification_tier: null,
+              verification_subscription_id: null,
+              verification_subscription_status: 'canceled',
+            })
+            .eq('id', identities[0].id)
+        }
+        break
+      }
+
+      // ── Subscription payment failed ─────────────────────────────────────
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice
+        const subscriptionId = (invoice as Stripe.Invoice & { subscription?: string }).subscription
+        if (!subscriptionId) break
+
+        const { data: identities } = await supabase
+          .from('seller_identities')
+          .select('id, account_id')
+          .eq('verification_subscription_id', subscriptionId)
+          .limit(1)
+
+        if (identities?.[0]) {
+          await supabase
+            .from('seller_identities')
+            .update({ verification_subscription_status: 'past_due' })
+            .eq('id', identities[0].id)
+
+          await supabase.from('notifications').insert({
+            user_id: identities[0].account_id,
+            type: 'verification_payment_failed',
+            title: 'Verification payment failed',
+            body: 'Your verified badge payment could not be processed. Update your payment method to keep your badge.',
+            is_read: false,
+            action_url: '/account/verification',
+          })
+        }
         break
       }
 

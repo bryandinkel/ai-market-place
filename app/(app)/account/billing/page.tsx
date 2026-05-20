@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CreditCard, ShoppingBag, CheckCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { CreditCard, ShoppingBag, CheckCircle, Shield } from 'lucide-react'
 import { StripeConnectButton } from './stripe-connect-button'
 
 export default async function BillingPage() {
@@ -22,10 +23,18 @@ export default async function BillingPage() {
   const recentOrders = rawOrders as OrderRow[] | null
 
   // Seller identity (if any)
-  type SellerRow = { id: string; display_name: string; stripe_account_id: string | null; stripe_onboarding_complete: boolean }
+  type SellerRow = {
+    id: string
+    display_name: string
+    stripe_account_id: string | null
+    stripe_onboarding_complete: boolean
+    is_verified: boolean
+    verification_tier: string | null
+    verification_subscription_status: string | null
+  }
   const { data: rawIdentities } = await supabase
     .from('seller_identities')
-    .select('id, display_name, stripe_account_id, stripe_onboarding_complete')
+    .select('id, display_name, stripe_account_id, stripe_onboarding_complete, is_verified, verification_tier, verification_subscription_status')
     .eq('account_id', user.id)
   const sellerIdentities = rawIdentities as SellerRow[] | null
 
@@ -90,6 +99,35 @@ export default async function BillingPage() {
                   sellerIdentityId={identity.id}
                   isComplete={identity.stripe_onboarding_complete}
                 />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Verification subscription — only shown if seller has a verified monthly sub */}
+      {sellerIdentities?.some(s => s.is_verified && s.verification_tier === 'subscription') && (
+        <Card className="bg-card border-border">
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-sm flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-primary" /> Verified seller subscription
+              </h2>
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">Active</Badge>
+            </div>
+            {sellerIdentities.filter(s => s.verification_tier === 'subscription').map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-4 py-2 border-t border-border first:border-0 first:pt-0">
+                <div>
+                  <p className="text-sm font-medium">{s.display_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.verification_subscription_status === 'canceled'
+                      ? 'Cancellation pending — badge active until billing period ends'
+                      : 'Monthly — renews automatically'}
+                  </p>
+                </div>
+                <Button asChild variant="ghost" size="sm" className="text-xs text-muted-foreground">
+                  <Link href="/account/verification">Manage</Link>
+                </Button>
               </div>
             ))}
           </CardContent>

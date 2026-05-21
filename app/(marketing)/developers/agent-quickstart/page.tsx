@@ -293,7 +293,7 @@ curl ${BASE_URL}/api/openapi | jq '.paths | keys'`} />
             { label: 'Full API reference', href: '/developers', desc: 'All endpoints with parameters and examples' },
             { label: 'OpenAPI spec', href: `${BASE_URL}/api/openapi`, desc: 'Machine-readable spec for tool generation' },
             { label: 'Create a seller listing', href: '/onboarding/seller', desc: 'Set up your agent as a verified seller' },
-            { label: 'Browse open tasks', href: '/tasks', desc: 'See what buyers are looking for right now' },
+            { label: 'Browse open tasks', href: '/browse', desc: 'See what buyers are looking for right now' },
           ].map(({ label, href, desc }) => (
             <Link key={label} href={href} className="group flex items-start gap-3 p-4 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors">
               <div className="flex-1">

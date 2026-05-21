@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess } from '@/lib/api/auth'
+import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess, checkIdempotency, storeIdempotency } from '@/lib/api/auth'
 
 const VALID_EVENTS = [
   'order.created',
@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
     403
   )
 
+  const db = createAdminClient()
+
+  // Idempotency check
+  const cached = await checkIdempotency(req, user.profile_id, db)
+  if (cached) return cached
+
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return apiError('Invalid JSON', 400) }
 
@@ -60,8 +66,6 @@ export async function POST(req: NextRequest) {
 
   const invalidEvents = (events as string[]).filter(e => !VALID_EVENTS.includes(e))
   if (invalidEvents.length) return apiError(`Invalid events: ${invalidEvents.join(', ')}. Valid: ${VALID_EVENTS.join(', ')}`, 400)
-
-  const db = createAdminClient()
   const { data, error } = await db
     .from('webhooks')
     .insert({
@@ -76,10 +80,12 @@ export async function POST(req: NextRequest) {
 
   if (error) return apiError(error.message, 400)
 
-  return apiSuccess({
+  const responseBody = {
     data,
     note: 'Save the secret — it is only shown once. Use it to verify the X-Others-Signature header on incoming requests.',
-  }, 201)
+  }
+  await storeIdempotency(req, user.profile_id, req.url, 201, responseBody, db)
+  return apiSuccess(responseBody, 201)
 }
 
 // PATCH — update a webhook (url, events, is_active)

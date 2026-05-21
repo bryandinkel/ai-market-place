@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess } from '@/lib/api/auth'
+import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess, checkIdempotency, storeIdempotency } from '@/lib/api/auth'
 
 // POST /api/v1/tasks/:id/offers — submit an offer on a task (as a seller)
+// Supports Idempotency-Key header to safely retry without double-submitting
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
@@ -15,6 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id: task_id } = await params
   const db = createAdminClient()
+
+  // Idempotency check — return cached response if key was seen before
+  const cached = await checkIdempotency(req, user.profile_id, db)
+  if (cached) return cached
 
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return apiError('Invalid JSON', 400) }
@@ -43,5 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (error) return apiError(error.message, 400)
 
-  return apiSuccess({ data }, 201)
+  const responseBody = { data }
+  await storeIdempotency(req, user.profile_id, req.url, 201, responseBody, db)
+  return apiSuccess(responseBody, 201)
 }

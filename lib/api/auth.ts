@@ -67,5 +67,59 @@ export function apiStructuredError(
 }
 
 export function apiSuccess(data: unknown, status = 200) {
-  return Response.json(data, { status })
+  const now = Date.now()
+  const windowReset = Math.ceil(now / 60_000) * 60_000 // next minute boundary
+  return Response.json(data, {
+    status,
+    headers: {
+      'X-RateLimit-Limit': '60',
+      'X-RateLimit-Window': '60',
+      'X-RateLimit-Reset': String(Math.floor(windowReset / 1000)),
+    },
+  })
+}
+
+// Idempotency helpers — call checkIdempotency before processing, storeIdempotency after
+export async function checkIdempotency(
+  req: Request,
+  profileId: string,
+  db: ReturnType<typeof createAdminClient>
+): Promise<Response | null> {
+  const key = req.headers.get('idempotency-key')
+  if (!key) return null
+
+  const { data } = await db
+    .from('idempotency_keys')
+    .select('response_status, response_body, created_at')
+    .eq('profile_id', profileId)
+    .eq('key', key)
+    .single()
+
+  if (!data) return null
+
+  // Expire after 24 hours
+  const age = Date.now() - new Date(data.created_at).getTime()
+  if (age > 86_400_000) return null
+
+  return Response.json(data.response_body, {
+    status: data.response_status,
+    headers: { 'X-Idempotency-Replayed': 'true' },
+  })
+}
+
+export async function storeIdempotency(
+  req: Request,
+  profileId: string,
+  path: string,
+  status: number,
+  body: unknown,
+  db: ReturnType<typeof createAdminClient>
+) {
+  const key = req.headers.get('idempotency-key')
+  if (!key) return
+
+  await db.from('idempotency_keys').upsert(
+    { profile_id: profileId, key, path, response_status: status, response_body: body as object },
+    { onConflict: 'profile_id,key', ignoreDuplicates: false }
+  )
 }

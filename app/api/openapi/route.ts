@@ -469,6 +469,235 @@ const spec = {
         },
       },
     },
+    '/categories': {
+      get: {
+        operationId: 'listCategories',
+        summary: 'List categories',
+        description: 'Enumerate all categories that have active listings or open tasks. Sorted by total count.',
+        security: [{ bearerAuth: [] }],
+        tags: ['Utilities'],
+        parameters: [
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['listings', 'tasks', 'all'] }, description: 'Filter by context. Defaults to all.' },
+        ],
+        responses: {
+          '200': {
+            description: 'List of categories with counts',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          slug: { type: 'string' },
+                          label: { type: 'string' },
+                          listing_count: { type: 'integer' },
+                          task_count: { type: 'integer' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/checkout': {
+      post: {
+        operationId: 'createCheckout',
+        summary: 'Create checkout session',
+        description: 'Creates a Stripe Checkout Session via API key (no browser session required). Returns a checkout_url to complete payment.',
+        tags: ['Orders'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['listing_id'],
+                properties: {
+                  listing_id: { type: 'string', format: 'uuid' },
+                  package_id: { type: 'string', format: 'uuid', description: 'Optional listing package to select' },
+                  success_url: { type: 'string', format: 'uri', description: 'Redirect after payment (defaults to /orders)' },
+                  cancel_url: { type: 'string', format: 'uri', description: 'Redirect on cancel (defaults to listing page)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Checkout session created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'object',
+                      properties: {
+                        checkout_url: { type: 'string', format: 'uri' },
+                        session_id: { type: 'string' },
+                        expires_at: { type: 'string', format: 'date-time' },
+                        amount: { type: 'integer', description: 'Amount in cents' },
+                        currency: { type: 'string' },
+                        listing_title: { type: 'string' },
+                      },
+                    },
+                    note: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Bad request (inactive listing, self-purchase, etc.)' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/conversations': {
+      get: {
+        operationId: 'listConversations',
+        summary: 'List conversations',
+        description: 'List all conversations for the authenticated account.',
+        tags: ['Messages'],
+        responses: {
+          '200': { description: 'List of conversations' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+        },
+      },
+      post: {
+        operationId: 'createConversation',
+        summary: 'Start a conversation',
+        description: 'Start a new conversation with a seller. If a conversation already exists, the message is added to the existing thread.',
+        tags: ['Messages'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['message'],
+                properties: {
+                  seller_slug: { type: 'string', description: 'Seller slug (use this or seller_identity_id)' },
+                  seller_identity_id: { type: 'string', format: 'uuid', description: 'Seller identity UUID (use this or seller_slug)' },
+                  message: { type: 'string', description: 'First message to send' },
+                  subject: { type: 'string', description: 'Optional conversation subject' },
+                  listing_id: { type: 'string', format: 'uuid', description: 'Optional: link conversation to a listing' },
+                  task_id: { type: 'string', format: 'uuid', description: 'Optional: link conversation to a task' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Message added to existing conversation' },
+          '201': { description: 'New conversation created' },
+          '400': { description: 'Bad request' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/orders/{id}/progress': {
+      get: {
+        operationId: 'getOrderProgress',
+        summary: 'List progress updates',
+        description: 'List all progress updates posted by the seller on an order.',
+        tags: ['Orders'],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': { description: 'List of progress updates' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '403': { '$ref': '#/components/responses/Forbidden' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+      post: {
+        operationId: 'postOrderProgress',
+        summary: 'Post progress update',
+        description: 'Post a progress update on an active order. Moves status from paid → in_progress automatically. Requires seller-linked key.',
+        tags: ['Orders'],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['message'],
+                properties: {
+                  message: { type: 'string', description: 'Progress update visible to the buyer' },
+                  metadata: { type: 'object', description: 'Optional structured data (percentages, step names, etc.)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Progress update posted' },
+          '400': { description: 'Bad request or order not in workable state' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '403': { '$ref': '#/components/responses/Forbidden' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/webhooks/{id}/test': {
+      post: {
+        operationId: 'testWebhook',
+        summary: 'Send test event',
+        description: 'Sends a signed test payload to a webhook endpoint. Returns HTTP status and duration. Requires seller-linked key.',
+        tags: ['Webhooks'],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'Webhook ID' }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  event_type: { type: 'string', description: 'Event type to simulate (default: order.created)', default: 'order.created' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Test result',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        status_code: { type: 'integer', nullable: true },
+                        duration_ms: { type: 'integer' },
+                        event_type: { type: 'string' },
+                        error: { type: 'string', nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '403': { '$ref': '#/components/responses/Forbidden' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/webhooks/deliveries': {
       get: {
         operationId: 'listWebhookDeliveries',

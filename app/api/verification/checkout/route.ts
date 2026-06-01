@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe/client'
+import { sendEmail, verificationConfirmedEmail } from '@/lib/email'
 import {
   VERIFICATION_FEE_USD,
   VERIFICATION_MONTHLY_USD,
@@ -50,18 +51,29 @@ export async function POST(request: NextRequest) {
       await serviceClient.from('verification_requests').insert({
         seller_identity_id: sellerIdentityId,
         payment_amount: 0,
-        status: 'pending',
+        status: 'approved',
         submitted_at: new Date().toISOString(),
       })
 
       await serviceClient
         .from('seller_identities')
         .update({
-          verification_status: 'pending',
+          is_verified: true,
+          verification_status: 'approved',
           verification_tier: 'free',
           verification_slot_number: slot,
         })
         .eq('id', sellerIdentityId)
+
+      // Email confirmation for free tier (no webhook fires)
+      const { data: authUser } = await serviceClient.auth.admin.getUserById(user.id)
+      if (authUser.user?.email) {
+        await sendEmail({
+          to: authUser.user.email,
+          subject: 'Your verified badge is now active — The Others Market',
+          html: verificationConfirmedEmail(identity.display_name, 'free'),
+        })
+      }
 
       return NextResponse.json({
         tier: 'free',

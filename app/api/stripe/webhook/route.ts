@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendEmail, verificationConfirmedEmail, orderConfirmedBuyerEmail, newOrderSellerEmail } from '@/lib/email'
 import Stripe from 'stripe'
 
 const PLATFORM_FEE_PCT = 0.10 // 10%
@@ -44,22 +45,53 @@ export async function POST(request: NextRequest) {
               await supabase
                 .from('seller_identities')
                 .update({
+                  is_verified: true,
+                  verification_status: 'approved',
                   verification_tier: 'lifetime',
                   verification_slot_number: slotNumber ? parseInt(slotNumber, 10) : null,
                 })
                 .eq('id', verifyId)
+
+              await supabase.from('verification_requests')
+                .update({ status: 'approved' })
+                .eq('seller_identity_id', verifyId)
+                .eq('status', 'pending')
             }
             if (verificationTier === 'subscription') {
               const subscriptionId = session.subscription as string | null
               await supabase
                 .from('seller_identities')
                 .update({
+                  is_verified: true,
+                  verification_status: 'approved',
                   verification_tier: 'subscription',
                   verification_slot_number: slotNumber ? parseInt(slotNumber, 10) : null,
                   verification_subscription_id: subscriptionId,
                   verification_subscription_status: 'active',
                 })
                 .eq('id', verifyId)
+
+              await supabase.from('verification_requests')
+                .update({ status: 'approved' })
+                .eq('seller_identity_id', verifyId)
+                .eq('status', 'pending')
+            }
+
+            // Send verification confirmed email
+            const { data: identity } = await supabase
+              .from('seller_identities')
+              .select('display_name, account_id')
+              .eq('id', verifyId)
+              .single()
+            if (identity) {
+              const { data: authUser } = await supabase.auth.admin.getUserById(identity.account_id)
+              if (authUser.user?.email) {
+                await sendEmail({
+                  to: authUser.user.email,
+                  subject: 'Your verified badge is now active — The Others Market',
+                  html: verificationConfirmedEmail(identity.display_name, verificationTier as string),
+                })
+              }
             }
           }
           break
@@ -132,10 +164,18 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        // Notify seller
+        // Fetch listing title for notifications
+        const { data: listing } = await supabase
+          .from('listings')
+          .select('title')
+          .eq('id', listingId)
+          .single()
+        const listingTitle = listing?.title ?? 'Your order'
+
+        // Notify + email seller
         const { data: identity } = await supabase
           .from('seller_identities')
-          .select('account_id')
+          .select('account_id, display_name')
           .eq('id', sellerIdentityId)
           .single()
 
@@ -148,9 +188,17 @@ export async function POST(request: NextRequest) {
             is_read: false,
             action_url: `/orders/${order.id}`,
           })
+          const { data: sellerAuth } = await supabase.auth.admin.getUserById(identity.account_id)
+          if (sellerAuth.user?.email) {
+            await sendEmail({
+              to: sellerAuth.user.email,
+              subject: `New order: ${listingTitle}`,
+              html: newOrderSellerEmail(identity.display_name, order.id, listingTitle, sellerPayout),
+            })
+          }
         }
 
-        // Notify buyer
+        // Notify + email buyer
         await supabase.from('notifications').insert({
           user_id: buyerId,
           type: 'order_placed',
@@ -159,6 +207,19 @@ export async function POST(request: NextRequest) {
           is_read: false,
           action_url: `/orders/${order.id}`,
         })
+        const { data: buyerProfile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', buyerId)
+          .single()
+        const { data: buyerAuth } = await supabase.auth.admin.getUserById(buyerId)
+        if (buyerAuth.user?.email) {
+          await sendEmail({
+            to: buyerAuth.user.email,
+            subject: `Order confirmed: ${listingTitle}`,
+            html: orderConfirmedBuyerEmail(buyerProfile?.display_name ?? 'there', order.id, listingTitle, grossAmount),
+          })
+        }
 
         break
       }

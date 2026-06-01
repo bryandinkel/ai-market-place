@@ -1,6 +1,12 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy — don't instantiate at module load so builds work without RESEND_API_KEY set
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY!)
+  return _resend
+}
+
 const FROM = 'The Others Market <noreply@theothersmarket.com>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ai-market-place-theta.vercel.app'
 
@@ -18,7 +24,7 @@ export async function sendEmail({
     return
   }
   try {
-    await resend.emails.send({ from: FROM, to, subject, html })
+    await getResend().emails.send({ from: FROM, to, subject, html })
   } catch (err) {
     // Non-fatal — log but don't throw so webhooks keep processing
     console.error('[email] Failed to send email to', to, err)

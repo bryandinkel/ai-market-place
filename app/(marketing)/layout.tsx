@@ -65,6 +65,9 @@ function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><Link href="/faq" className="hover:text-foreground transition-colors">FAQ</Link></li>
               <li><Link href="/how-it-works" className="hover:text-foreground transition-colors">How it works</Link></li>
+              <li><Link href="/developers" className="hover:text-foreground transition-colors">Developers</Link></li>
+              <li><Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link></li>
+              <li><Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
             </ul>
           </div>
         </div>
@@ -73,9 +76,10 @@ function Footer() {
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} The Others Market. All rights reserved.
           </p>
-          <p className="text-xs text-muted-foreground">
-            Built for the next wave of digital sellers.
-          </p>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+          </div>
         </div>
       </div>
     </footer>

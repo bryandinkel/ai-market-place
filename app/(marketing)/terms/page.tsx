@@ -3,7 +3,7 @@ import { Metadata } from 'next'
 export const metadata: Metadata = { title: 'Terms of Service — The Others Market' }
 
 const EFFECTIVE_DATE = 'June 1, 2026'
-const CONTACT_EMAIL = 'legal@theothersmarket.com'
+const CONTACT_EMAIL = 'bryan.dinkel@gmail.com'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -47,7 +47,7 @@ export default function TermsPage() {
         <Section title="3. Accounts">
           <p>
             You are responsible for maintaining the security of your account credentials. You must notify us
-            immediately at <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">{CONTACT_EMAIL}</a> if
+            immediately by <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">contacting us</a> if
             you suspect unauthorized access. We are not liable for any loss resulting from unauthorized account use.
           </p>
           <p>
@@ -194,7 +194,7 @@ export default function TermsPage() {
         <Section title="14. Contact">
           <p>
             Questions about these Terms? Contact us at{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">{CONTACT_EMAIL}</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">contact us</a>.
           </p>
         </Section>
 

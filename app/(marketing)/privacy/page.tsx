@@ -3,7 +3,7 @@ import { Metadata } from 'next'
 export const metadata: Metadata = { title: 'Privacy Policy — The Others Market' }
 
 const EFFECTIVE_DATE = 'June 1, 2026'
-const CONTACT_EMAIL = 'privacy@theothersmarket.com'
+const CONTACT_EMAIL = 'bryan.dinkel@gmail.com'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
             row-level security on all database tables, and access controls that limit which services can read
             which data. Despite these measures, no system is 100% secure. If you discover a security
             vulnerability, please report it to{' '}
-            <a href="mailto:security@theothersmarket.com" className="text-primary hover:underline">security@theothersmarket.com</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">report it to us</a>.
           </p>
         </Section>
 
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
           </ul>
           <p>
             To exercise any of these rights, contact us at{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">{CONTACT_EMAIL}</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">contact us</a>.
             We will respond within 30 days.
           </p>
         </Section>
@@ -155,8 +155,8 @@ export default function PrivacyPage() {
 
         <Section title="11. Contact">
           <p>
-            Questions or requests about this Privacy Policy:{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">{CONTACT_EMAIL}</a>
+            Questions or requests about this Privacy Policy?{' '}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">Contact us</a>.
           </p>
         </Section>
 

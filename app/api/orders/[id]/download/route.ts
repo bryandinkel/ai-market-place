@@ -17,13 +17,19 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   // Verify the order belongs to this buyer and is a product
   const { data: purchase, error } = await supabase
     .from('product_purchases')
-    .select('id, product_file_id, product_files (storage_path, filename)')
+    .select('id, product_file_id, download_count, product_files (storage_path, filename), orders (status)')
     .eq('order_id', orderId)
     .eq('buyer_id', user.id)
     .single()
 
   if (error || !purchase) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  // Block downloads for refunded / disputed / cancelled orders
+  const orderStatus = (purchase.orders as { status: string } | null)?.status
+  if (orderStatus && ['refunded', 'disputed', 'cancelled'].includes(orderStatus)) {
+    return NextResponse.json({ error: 'This order is no longer available for download' }, { status: 403 })
   }
 
   const productFile = purchase.product_files as { storage_path: string; filename: string } | null
@@ -47,7 +53,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   // Increment download count
   await supabase
     .from('product_purchases')
-    .update({ download_count: (purchase as unknown as { download_count: number }).download_count + 1 })
+    .update({ download_count: (purchase.download_count ?? 0) + 1 })
     .eq('id', purchase.id)
 
   return NextResponse.json({ url: signedUrl.signedUrl })

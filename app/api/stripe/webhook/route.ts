@@ -105,6 +105,18 @@ export async function POST(request: NextRequest) {
           break
         }
 
+        // Idempotency: Stripe retries webhooks, so skip if this session was
+        // already turned into an order.
+        const { data: existingOrder } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('stripe_session_id', session.id)
+          .maybeSingle()
+        if (existingOrder) {
+          console.log('Order already exists for session', session.id)
+          break
+        }
+
         const grossAmount = session.amount_total ?? 0
         const platformFee = Math.round(grossAmount * PLATFORM_FEE_PCT)
         const sellerPayout = grossAmount - platformFee
@@ -154,11 +166,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // For packages: record the package on the order
-        if (packageId) {
+        // For packages / add-ons: record line detail on the order
+        let parsedAddons: unknown = []
+        try { parsedAddons = JSON.parse(meta.addons ?? '[]') } catch { parsedAddons = [] }
+        if (packageId || (Array.isArray(parsedAddons) && parsedAddons.length > 0)) {
           await supabase.from('order_items').insert({
             order_id: order.id,
-            package_id: packageId,
+            package_id: packageId || null,
+            addons: parsedAddons,
             quantity: 1,
             unit_price: grossAmount,
           })
@@ -288,6 +303,42 @@ export async function POST(request: NextRequest) {
           .from('orders')
           .update({ status: 'refunded' })
           .eq('stripe_payment_intent_id', paymentIntentId)
+
+        break
+      }
+
+      // ── Chargeback opened ───────────────────────────────────────────────
+      // Mark the order disputed so the payout cron (which only pays 'paid'
+      // orders) won't release funds Stripe is about to claw back.
+      case 'charge.dispute.created': {
+        const dispute = event.data.object as Stripe.Dispute
+        const paymentIntentId = dispute.payment_intent as string
+        if (!paymentIntentId) break
+
+        const { data: disputedOrder } = await supabase
+          .from('orders')
+          .update({ status: 'disputed' })
+          .eq('stripe_payment_intent_id', paymentIntentId)
+          .select('id, buyer_id, seller_identity_id')
+          .maybeSingle()
+
+        if (disputedOrder) {
+          const { data: identity } = await supabase
+            .from('seller_identities')
+            .select('account_id')
+            .eq('id', disputedOrder.seller_identity_id)
+            .single()
+          if (identity) {
+            await supabase.from('notifications').insert({
+              user_id: identity.account_id,
+              type: 'order_disputed',
+              title: 'Order disputed',
+              body: 'A buyer opened a payment dispute on one of your orders. Payout is on hold while it is resolved.',
+              is_read: false,
+              action_url: `/orders/${disputedOrder.id}`,
+            })
+          }
+        }
 
         break
       }

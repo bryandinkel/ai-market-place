@@ -24,6 +24,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
     }
 
+    // Only active listings can be purchased (blocks stale links to paused/draft)
+    if (listing.status !== 'active') {
+      return NextResponse.json({ error: 'This listing is not available for purchase' }, { status: 400 })
+    }
+
     // Determine price
     let price = listing.price_min
     let productName = listing.title
@@ -36,9 +41,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Resolve selected add-ons against the DB — never trust client-sent prices
+    const selectedAddons: { id: string; name: string; price: number }[] = []
+    if (Array.isArray(addons) && addons.length > 0) {
+      const { data: addonRecords } = await supabase
+        .from('listing_addons')
+        .select('id, name, price')
+        .eq('listing_id', listingId)
+        .in('id', addons)
+      for (const a of (addonRecords ?? []) as { id: string; name: string; price: number }[]) {
+        selectedAddons.push(a)
+      }
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session — base item plus one line per add-on so the
+    // buyer sees them itemized and amount_total reflects the real charge.
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -54,6 +73,14 @@ export async function POST(request: NextRequest) {
           },
           quantity: 1,
         },
+        ...selectedAddons.map((a) => ({
+          price_data: {
+            currency: 'usd' as const,
+            product_data: { name: `Add-on: ${a.name}` },
+            unit_amount: a.price,
+          },
+          quantity: 1,
+        })),
       ],
       automatic_tax: { enabled: true },
       success_url: `${appUrl}/orders?success=true&session_id={CHECKOUT_SESSION_ID}`,
@@ -64,7 +91,7 @@ export async function POST(request: NextRequest) {
         sellerIdentityId: (listing.seller_identities as { id: string }).id,
         orderType: listing.listing_type,
         packageId: packageId ?? '',
-        addons: JSON.stringify(addons),
+        addons: JSON.stringify(selectedAddons.map((a) => ({ id: a.id, name: a.name, price: a.price }))),
       },
     })
 

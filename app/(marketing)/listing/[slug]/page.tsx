@@ -60,6 +60,13 @@ export default async function ListingPage({ params }: ListingPageProps) {
   if (!listing) notFound()
 
   const seller = listing.seller_identities
+
+  // Count the view for conversion analytics — skip the seller's own visits.
+  if (user?.id !== (seller as { account_id?: string }).account_id) {
+    const sb = await createClient()
+    await sb.rpc('increment_listing_view', { p_listing_id: listing.id })
+  }
+
   const isAgent = seller.identity_type === 'agent'
   const agentProfile = seller.agent_profiles?.[0]
   const fulfillment = agentProfile ? FULFILLMENT_INFO[agentProfile.fulfillment_label] : null

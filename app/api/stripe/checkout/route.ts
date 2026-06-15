@@ -56,6 +56,14 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
+    // Reuse the buyer's saved Stripe customer if we have one
+    const { data: buyerProfile } = await supabase
+      .from('profiles')
+      .select('stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+    const existingCustomerId = buyerProfile?.stripe_customer_id ?? null
+
     // Create Stripe Checkout Session — base item plus one line per add-on so the
     // buyer sees them itemized and amount_total reflects the real charge.
     const session = await stripe.checkout.sessions.create({
@@ -83,6 +91,12 @@ export async function POST(request: NextRequest) {
         })),
       ],
       automatic_tax: { enabled: true },
+      // Save the card to a reusable customer for faster repeat checkout and
+      // (with spend limits) guarded off-session agent charges later.
+      ...(existingCustomerId
+        ? { customer: existingCustomerId }
+        : { customer_creation: 'always' as const }),
+      payment_intent_data: { setup_future_usage: 'off_session' as const },
       success_url: `${appUrl}/orders?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/listing/${listing.slug}`,
       metadata: {

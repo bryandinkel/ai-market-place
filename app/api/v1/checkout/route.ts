@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiRequest, createAdminClient, apiError, apiSuccess } from '@/lib/api/auth'
+import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess } from '@/lib/api/auth'
 import { stripe } from '@/lib/stripe/client'
 
 // POST /api/v1/checkout — create a Stripe Checkout Session via API key (no browser session required)
@@ -22,12 +22,12 @@ export async function POST(req: NextRequest) {
   // Fetch listing with seller identity and packages
   const { data: listing } = await db
     .from('listings')
-    .select('id, title, slug, price_min, listing_type, is_active, seller_identity_id, seller_identities(id, display_name, account_id), listing_packages(*)')
+    .select('id, title, slug, price_min, listing_type, status, seller_identity_id, seller_identities(id, display_name, account_id), listing_packages(*)')
     .eq('id', listing_id)
     .single()
 
   if (!listing) return apiError('Listing not found', 404)
-  if (!listing.is_active) return apiError('Listing is not active', 400)
+  if (listing.status !== 'active') return apiError('Listing is not active', 400)
 
   const seller = listing.seller_identities as { id: string; display_name: string; account_id: string } | null
   if (!seller) return apiError('Listing has no seller', 400)
@@ -47,6 +47,37 @@ export async function POST(req: NextRequest) {
     if (!pkg) return apiError('Package not found on this listing', 404)
     price = pkg.price
     productName = `${listing.title} — ${pkg.name}`
+  }
+
+  // Enforce delegated spend limits on this API key (if set)
+  if (user.max_transaction_cents != null && price > user.max_transaction_cents) {
+    return apiStructuredError(
+      'transaction_over_limit',
+      `This purchase ($${(price / 100).toFixed(2)}) exceeds the per-transaction limit on this API key ($${(user.max_transaction_cents / 100).toFixed(2)}).`,
+      'Raise max_transaction_cents on the key, or use a key without a per-transaction cap.',
+      '/developers',
+      402
+    )
+  }
+  if (user.spend_limit_cents != null) {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const { data: monthOrders } = await db
+      .from('orders')
+      .select('total_amount')
+      .eq('api_key_id', user.key_id)
+      .gte('created_at', monthStart)
+      .in('status', ['paid', 'in_progress', 'delivered', 'revision_requested', 'completed', 'disputed', 'refunded'])
+    const spent = (monthOrders ?? []).reduce((sum, o) => sum + (o.total_amount ?? 0), 0)
+    if (spent + price > user.spend_limit_cents) {
+      return apiStructuredError(
+        'monthly_spend_limit_reached',
+        `This purchase would exceed the monthly spend limit on this API key. Spent $${(spent / 100).toFixed(2)} of $${(user.spend_limit_cents / 100).toFixed(2)}; this purchase is $${(price / 100).toFixed(2)}.`,
+        'Wait for the monthly window to reset, or raise spend_limit_cents on the key.',
+        '/developers',
+        402
+      )
+    }
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ai-market-place-theta.vercel.app'
@@ -77,6 +108,7 @@ export async function POST(req: NextRequest) {
       orderType: listing.listing_type as string,
       packageId: (package_id as string) ?? '',
       addons: '[]',
+      apiKeyId: user.key_id,
     },
   })
 

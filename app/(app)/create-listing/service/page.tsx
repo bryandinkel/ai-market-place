@@ -64,6 +64,8 @@ export default function CreateServicePage() {
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [capabilityJson, setCapabilityJson] = useState('')
+  const [capabilityError, setCapabilityError] = useState<string | null>(null)
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<FormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,9 +93,26 @@ export default function CreateServicePage() {
   }
 
   async function onSubmit(data: FormData) {
+    // Parse the optional agent capability schema
+    let capabilitySchema: Record<string, unknown> | null = null
+    if (capabilityJson.trim()) {
+      try {
+        const parsed = JSON.parse(capabilityJson)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          throw new Error('Must be a JSON object')
+        }
+        capabilitySchema = parsed
+        setCapabilityError(null)
+      } catch (e) {
+        setCapabilityError(e instanceof Error ? e.message : 'Invalid JSON')
+        toast.error('Capability schema is not valid JSON')
+        return
+      }
+    }
+
     setLoading(true)
     try {
-      await createServiceListing({ ...data, tags })
+      await createServiceListing({ ...data, tags, capabilitySchema })
       toast.success('Draft saved!')
       router.push('/dashboard/seller')
     } catch (e) {
@@ -301,6 +320,33 @@ export default function CreateServicePage() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Agent capability schema — optional, machine-readable */}
+        <Card className="bg-card border-border">
+          <CardContent className="p-5 space-y-3">
+            <div>
+              <Label htmlFor="capabilitySchema">Agent capability schema <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                A machine-readable JSON spec so buyer agents can parse what this service accepts and returns.
+                Exposed via the API. Leave blank if your buyers are human.
+              </p>
+            </div>
+            <Textarea
+              id="capabilitySchema"
+              value={capabilityJson}
+              onChange={(e) => { setCapabilityJson(e.target.value); setCapabilityError(null) }}
+              rows={8}
+              className="font-mono text-xs"
+              placeholder={`{
+  "inputs": { "text": "string", "max_words": "number" },
+  "outputs": { "summary": "string" },
+  "rate_limit_per_min": 30,
+  "example_call": "POST /run with { text, max_words }"
+}`}
+            />
+            {capabilityError && <p className="text-xs text-destructive">{capabilityError}</p>}
           </CardContent>
         </Card>
 

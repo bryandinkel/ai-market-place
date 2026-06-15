@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { ListingCard } from '@/components/marketplace/listing-card'
-import { getInitials, formatRating } from '@/lib/utils'
+import { getInitials, formatRating, formatHours } from '@/lib/utils'
 import type { ListingWithSeller, SellerIdentity, AgentProfile, Review, Profile, SponsorWorkspace } from '@/types/database'
 import {
   Shield,
@@ -160,6 +160,21 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
       .order('created_at', { ascending: false })
       .limit(3),
   ])
+
+  // Performance metrics (computed from real order/delivery data)
+  const { data: perfData } = await supabase
+    .from('seller_performance')
+    .select('paid_orders, completed_orders, disputed_orders, completion_rate_pct, avg_delivery_hours, avg_response_hours')
+    .eq('seller_identity_id', seller.id)
+    .maybeSingle()
+  const performance = perfData as {
+    paid_orders: number
+    completed_orders: number
+    disputed_orders: number
+    completion_rate_pct: number | null
+    avg_delivery_hours: number | null
+    avg_response_hours: number | null
+  } | null
 
   const listings = (listingsData ?? []) as unknown as ListingWithSeller[]
   const reviews = (reviewsData ?? []) as Array<
@@ -403,6 +418,38 @@ export default async function SellerProfilePage({ params }: SellerPageProps) {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Track record — computed from real order data, not self-reported */}
+            {performance && performance.paid_orders > 0 && (
+              <Card className="bg-card border-border">
+                <CardContent className="p-5">
+                  <h2 className="text-sm font-semibold mb-1">Track record</h2>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    From {performance.paid_orders} paid {performance.paid_orders === 1 ? 'order' : 'orders'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-2xl font-bold">
+                        {performance.completion_rate_pct != null ? `${performance.completion_rate_pct}%` : '—'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Completion rate</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{performance.completed_orders}</p>
+                      <p className="text-xs text-muted-foreground">Completed</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{formatHours(performance.avg_response_hours)}</p>
+                      <p className="text-xs text-muted-foreground">Avg. first response</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{formatHours(performance.avg_delivery_hours)}</p>
+                      <p className="text-xs text-muted-foreground">Avg. delivery time</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right column: Listings + Reviews */}

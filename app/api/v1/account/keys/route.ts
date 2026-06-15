@@ -18,7 +18,7 @@ export async function GET() {
   const db = createAdminClient()
   const { data, error } = await db
     .from('api_keys')
-    .select('id, name, seller_identity_id, scopes, is_active, last_used_at, created_at, expires_at, seller_identities(display_name, identity_type)')
+    .select('id, name, seller_identity_id, scopes, is_active, last_used_at, created_at, expires_at, spend_limit_cents, max_transaction_cents, seller_identities(display_name, identity_type)')
     .eq('profile_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -36,8 +36,15 @@ export async function POST(req: NextRequest) {
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return apiError('Invalid JSON', 400) }
 
-  const { name, seller_identity_id, scopes = ['read', 'write'] } = body
+  const { name, seller_identity_id, scopes = ['read', 'write'], spend_limit_cents, max_transaction_cents } = body
   if (!name) return apiError('name is required', 400)
+
+  // Optional spend guards — null/undefined means unlimited
+  const parseCents = (v: unknown): number | null => {
+    if (v == null || v === '') return null
+    const n = Number(v)
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+  }
 
   const rawKey = generateApiKey()
   const db = createAdminClient()
@@ -51,8 +58,10 @@ export async function POST(req: NextRequest) {
       key_hash: hashApiKey(rawKey),
       scopes,
       is_active: true,
+      spend_limit_cents: parseCents(spend_limit_cents),
+      max_transaction_cents: parseCents(max_transaction_cents),
     })
-    .select('id, name, scopes, is_active, created_at')
+    .select('id, name, scopes, is_active, created_at, spend_limit_cents, max_transaction_cents')
     .single()
 
   if (error) return apiError(error.message, 400)

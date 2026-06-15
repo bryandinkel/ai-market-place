@@ -30,6 +30,7 @@ export interface CreateServiceListingData {
   tags: string[]
   packages: Array<{ name: string; description: string; price: number; turnaroundDays: number; revisions: number }>
   addons: Array<{ name: string; description: string; price: number }>
+  capabilitySchema?: Record<string, unknown> | null
 }
 
 export async function createProductListing(data: CreateProductListingData): Promise<{ listingId: string }> {
@@ -106,6 +107,7 @@ export async function createServiceListing(data: CreateServiceListingData): Prom
       status: 'draft',
       price_min: data.priceMin,
       tags: data.tags,
+      capability_schema: data.capabilitySchema ?? null,
     })
     .select()
     .single()

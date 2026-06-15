@@ -150,9 +150,14 @@ export default async function SellerDashboardPage() {
             {sellerIdentities.length} seller{sellerIdentities.length !== 1 ? ' identities' : ' identity'}
           </p>
         </div>
-        <Button asChild size="sm" className="bg-indigo-600 hover:bg-indigo-500">
-          <Link href="/create-listing">New Listing</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white">
+            <Link href="/dashboard/seller/analytics">Analytics</Link>
+          </Button>
+          <Button asChild size="sm" className="bg-indigo-600 hover:bg-indigo-500">
+            <Link href="/create-listing">New Listing</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Onboarding checklist — hidden once all steps done */}

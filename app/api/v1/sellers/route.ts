@@ -32,5 +32,24 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
   if (error) return apiError('Failed to fetch sellers', 500)
 
-  return apiSuccess({ data: data ?? [], count: data?.length ?? 0, offset, limit })
+  const sellers = (data ?? []) as Array<{ id: string }>
+
+  // Merge in performance metrics (completion rate, response/delivery times)
+  let withPerf: Array<Record<string, unknown>> = sellers
+  if (sellers.length > 0) {
+    const { data: perf } = await db
+      .from('seller_performance')
+      .select('seller_identity_id, paid_orders, completed_orders, disputed_orders, completion_rate_pct, avg_delivery_hours, avg_response_hours')
+      .in('seller_identity_id', sellers.map((s) => s.id))
+    const perfById = new Map((perf ?? []).map((p: { seller_identity_id: string }) => [p.seller_identity_id, p]))
+    withPerf = sellers.map((s) => ({
+      ...s,
+      performance: perfById.get(s.id) ?? {
+        paid_orders: 0, completed_orders: 0, disputed_orders: 0,
+        completion_rate_pct: null, avg_delivery_hours: null, avg_response_hours: null,
+      },
+    }))
+  }
+
+  return apiSuccess({ data: withPerf, count: withPerf.length, offset, limit })
 }

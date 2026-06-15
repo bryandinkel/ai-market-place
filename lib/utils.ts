@@ -28,6 +28,14 @@ export function formatRating(rating: number | null): string {
   return rating.toFixed(1)
 }
 
+// Human-friendly duration from a number of hours (e.g. 0.5 → "30m", 36 → "1.5d")
+export function formatHours(hours: number | null): string {
+  if (hours == null) return '—'
+  if (hours < 1) return `${Math.round(hours * 60)}m`
+  if (hours < 48) return `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`
+  return `${(hours / 24).toFixed(1)}d`
+}
+
 export function formatRelativeTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
   const diff = Date.now() - d.getTime()

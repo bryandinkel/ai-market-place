@@ -19,6 +19,8 @@ interface ApiKey {
   is_active: boolean
   last_used_at: string | null
   created_at: string
+  spend_limit_cents: number | null
+  max_transaction_cents: number | null
 }
 
 interface Seller {
@@ -34,7 +36,7 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
   const [showForm, setShowForm] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [form, setForm] = useState({ name: '', seller_identity_id: '' })
+  const [form, setForm] = useState({ name: '', seller_identity_id: '', spend_limit: '', max_transaction: '' })
 
   async function fetchKeys() {
     setLoading(true)
@@ -59,6 +61,9 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
         name: form.name,
         seller_identity_id: form.seller_identity_id || null,
         scopes: ['read', 'write'],
+        // Dollars in the form → cents for the API
+        spend_limit_cents: form.spend_limit ? Math.round(parseFloat(form.spend_limit) * 100) : null,
+        max_transaction_cents: form.max_transaction ? Math.round(parseFloat(form.max_transaction) * 100) : null,
       }),
     })
     const json = await res.json()
@@ -69,7 +74,7 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
     }
     setNewKey(json.data.key)
     setShowForm(false)
-    setForm({ name: '', seller_identity_id: '' })
+    setForm({ name: '', seller_identity_id: '', spend_limit: '', max_transaction: '' })
     fetchKeys()
     setCreating(false)
   }
@@ -164,6 +169,36 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
                     <p className="text-xs text-muted-foreground">Linking enables this key to sell, submit offers, and deliver orders as that identity.</p>
                   </div>
                 )}
+                {/* Spend guards for autonomous purchasing */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="spend_limit">Monthly spend limit ($)</Label>
+                    <Input
+                      id="spend_limit"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Unlimited"
+                      value={form.spend_limit}
+                      onChange={e => setForm(f => ({ ...f, spend_limit: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="max_transaction">Per-purchase limit ($)</Label>
+                    <Input
+                      id="max_transaction"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Unlimited"
+                      value={form.max_transaction}
+                      onChange={e => setForm(f => ({ ...f, max_transaction: e.target.value }))}
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Caps on what an agent can spend with this key. Leave blank for no limit.
+                  </p>
+                </div>
                 <div className="flex gap-2">
                   <Button type="submit" size="sm" disabled={creating}>
                     {creating ? 'Creating…' : 'Create key'}
@@ -214,6 +249,13 @@ export function ApiKeysManager({ sellers }: { sellers: Seller[] }) {
                         ? ' · Can manage webhooks, submit offers, deliver orders'
                         : ' · Read/buy only — seller endpoints require a seller key'}
                     </p>
+                    {(k.spend_limit_cents != null || k.max_transaction_cents != null) && (
+                      <p className="text-xs text-amber-400/80">
+                        {k.spend_limit_cents != null && `Monthly cap $${(k.spend_limit_cents / 100).toFixed(2)}`}
+                        {k.spend_limit_cents != null && k.max_transaction_cents != null && ' · '}
+                        {k.max_transaction_cents != null && `Per-purchase cap $${(k.max_transaction_cents / 100).toFixed(2)}`}
+                      </p>
+                    )}
                   </div>
                   {k.is_active && (
                     <Button

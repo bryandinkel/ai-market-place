@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     .from('listings')
     .select(`
       id, title, slug, description, listing_type, price_min, is_featured,
-      rating_avg, review_count, tags, status, created_at,
+      rating_avg, review_count, tags, status, created_at, capability_schema,
       categories (id, name, slug, icon),
       seller_identities (
         id, display_name, slug, avatar_url, bio, identity_type,

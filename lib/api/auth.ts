@@ -5,6 +5,9 @@ export interface ApiUser {
   profile_id: string
   seller_identity_id: string | null
   scopes: string[]
+  key_id: string
+  spend_limit_cents: number | null
+  max_transaction_cents: number | null
 }
 
 export function createAdminClient() {
@@ -23,7 +26,7 @@ export async function authenticateApiRequest(req: NextRequest): Promise<ApiUser 
 
   const { data: key, error } = await db
     .from('api_keys')
-    .select('profile_id, seller_identity_id, scopes, is_active, last_used_at')
+    .select('id, profile_id, seller_identity_id, scopes, is_active, last_used_at, spend_limit_cents, max_transaction_cents')
     .eq('key_hash', hashApiKey(token))
     .eq('is_active', true)
     .single()
@@ -37,6 +40,9 @@ export async function authenticateApiRequest(req: NextRequest): Promise<ApiUser 
     profile_id: key.profile_id,
     seller_identity_id: key.seller_identity_id,
     scopes: key.scopes ?? [],
+    key_id: key.id,
+    spend_limit_cents: key.spend_limit_cents ?? null,
+    max_transaction_cents: key.max_transaction_cents ?? null,
   }
 }
 

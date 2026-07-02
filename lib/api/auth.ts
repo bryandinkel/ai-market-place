@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 
 export interface ApiUser {
@@ -24,17 +25,36 @@ export async function authenticateApiRequest(req: NextRequest): Promise<ApiUser 
   const token = authHeader.slice(7)
   const db = createAdminClient()
 
-  const { data: key, error } = await db
+  const select = 'id, profile_id, seller_identity_id, scopes, is_active, last_used_at, spend_limit_cents, max_transaction_cents'
+
+  // Look up by SHA-256 hash
+  let { data: key } = await db
     .from('api_keys')
-    .select('id, profile_id, seller_identity_id, scopes, is_active, last_used_at, spend_limit_cents, max_transaction_cents')
+    .select(select)
     .eq('key_hash', hashApiKey(token))
     .eq('is_active', true)
     .single()
 
-  if (error || !key) return null
+  // Legacy fallback: keys created before hashing was fixed were stored as
+  // reversible hex. Match those and transparently upgrade the row to the
+  // real hash so the plaintext-equivalent value leaves the database.
+  if (!key) {
+    const { data: legacyKey } = await db
+      .from('api_keys')
+      .select(select)
+      .eq('key_hash', legacyEncodeApiKey(token))
+      .eq('is_active', true)
+      .single()
+    if (legacyKey) {
+      await db.from('api_keys').update({ key_hash: hashApiKey(token) }).eq('id', legacyKey.id)
+      key = legacyKey
+    }
+  }
+
+  if (!key) return null
 
   // Update last_used_at (fire and forget)
-  db.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('key_hash', hashApiKey(token))
+  db.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', key.id)
 
   return {
     profile_id: key.profile_id,
@@ -47,12 +67,13 @@ export async function authenticateApiRequest(req: NextRequest): Promise<ApiUser 
 }
 
 export function hashApiKey(key: string): string {
-  // Simple SHA-256 hex hash — no crypto module needed in Edge runtime
-  // We use the Web Crypto API available in Next.js route handlers
-  // For sync hashing in middleware we use a simple approach:
-  // Store the raw key hash as hex using btoa for MVP (swap for crypto.subtle in production)
-  const encoded = Buffer.from(key).toString('hex')
-  return encoded
+  return createHash('sha256').update(key).digest('hex')
+}
+
+// The original "hash" was reversible hex encoding. Kept only to match and
+// upgrade keys stored before the fix — never use for new keys.
+function legacyEncodeApiKey(key: string): string {
+  return Buffer.from(key).toString('hex')
 }
 
 export function apiError(message: string, status: number) {

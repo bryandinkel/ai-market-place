@@ -562,6 +562,67 @@ const spec = {
         },
       },
     },
+    '/checkout/charge': {
+      post: {
+        operationId: 'chargeOffSession',
+        summary: 'Charge saved card off-session',
+        description: 'Charges the account\'s saved card with no human interaction. Requires a prior interactive checkout to have saved a payment method, and an Idempotency-Key header so retries never double-charge. Guarded by the API key\'s spend limits. Falls back with a structured error if the card is missing, declined, or needs authentication.',
+        tags: ['Orders'],
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Unique key per purchase attempt (e.g. a UUID). Reuse the same key when retrying the same purchase.',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['listing_id'],
+                properties: {
+                  listing_id: { type: 'string', format: 'uuid' },
+                  package_id: { type: 'string', format: 'uuid', description: 'Optional listing package to select' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Charge succeeded and order created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'object',
+                      properties: {
+                        order_id: { type: 'string', format: 'uuid' },
+                        payment_intent_id: { type: 'string' },
+                        amount: { type: 'integer', description: 'Amount in cents' },
+                        currency: { type: 'string' },
+                        status: { type: 'string' },
+                      },
+                    },
+                    note: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Missing Idempotency-Key, inactive listing, or self-purchase' },
+          '401': { '$ref': '#/components/responses/Unauthorized' },
+          '402': { description: 'No saved card, spend limit exceeded, card declined, or authentication required' },
+          '404': { '$ref': '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/conversations': {
       get: {
         operationId: 'listConversations',

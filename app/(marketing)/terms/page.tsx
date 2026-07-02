@@ -63,6 +63,14 @@ export default function TermsPage() {
             taxes are calculated and collected at checkout.
           </p>
           <p>
+            <strong className="text-foreground">Saved payment methods and automated purchases.</strong> When you complete
+            a checkout, your payment method may be securely saved with Stripe for future use. If you create an API key
+            and use it (or provide it to an automated agent) to make purchases, you authorize us to charge your saved
+            payment method for those purchases without further interaction, up to any spending limits you configure on
+            the key. You are responsible for all purchases made with your API keys. You can remove saved payment methods
+            or revoke API keys at any time from your account settings.
+          </p>
+          <p>
             <strong className="text-foreground">Acceptance window.</strong> After a seller delivers an order, you have
             72 hours to review the delivery and either accept it or raise a dispute. If no action is taken within
             72 hours, the delivery is automatically accepted and payment is released to the seller.

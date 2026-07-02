@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess } from '@/lib/api/auth'
+import { authenticateApiRequest, createAdminClient, apiError, apiStructuredError, apiSuccess, checkIdempotency, storeIdempotency } from '@/lib/api/auth'
 import { stripe } from '@/lib/stripe/client'
 import { createMarketplaceOrder } from '@/lib/orders'
 
@@ -13,6 +13,16 @@ export async function POST(req: NextRequest) {
   const user = await authenticateApiRequest(req)
   if (!user) return apiError('Unauthorized', 401)
 
+  // This endpoint charges a card with no human present — an unnoticed retry
+  // must never double-charge, so the Idempotency-Key header is mandatory.
+  const idempotencyKey = req.headers.get('idempotency-key')
+  if (!idempotencyKey) {
+    return apiStructuredError('idempotency_key_required',
+      'Off-session charges require an Idempotency-Key header so retries are safe.',
+      'Generate a unique key per purchase attempt (e.g. a UUID) and send it as the Idempotency-Key header. Reuse the same key when retrying the same purchase.',
+      '/developers', 400)
+  }
+
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return apiError('Invalid JSON', 400) }
 
@@ -20,6 +30,10 @@ export async function POST(req: NextRequest) {
   if (!listing_id || typeof listing_id !== 'string') return apiError('listing_id is required', 400)
 
   const db = createAdminClient()
+
+  // Replay a previous response for this key instead of charging again
+  const replay = await checkIdempotency(req, user.profile_id, db)
+  if (replay) return replay
 
   const { data: listing } = await db
     .from('listings')
@@ -93,7 +107,8 @@ export async function POST(req: NextRequest) {
       'Use POST /v1/checkout once to save a card.', '/developers', 402)
   }
 
-  // Charge off-session
+  // Charge off-session — Stripe's own idempotency layer backs up ours, so the
+  // same key can never produce two PaymentIntents even on a race.
   let paymentIntent
   try {
     paymentIntent = await stripe.paymentIntents.create({
@@ -109,7 +124,7 @@ export async function POST(req: NextRequest) {
         sellerIdentityId: seller.id,
         apiKeyId: user.key_id,
       },
-    })
+    }, { idempotencyKey: `charge_${user.profile_id}_${idempotencyKey}` })
   } catch (err) {
     // Card declined or requires authentication (SCA) — can't be done off-session
     const message = err instanceof Error ? err.message : 'Card charge failed'
@@ -138,7 +153,7 @@ export async function POST(req: NextRequest) {
 
   if (!result.orderId) return apiError('Payment succeeded but order creation failed — contact support', 500)
 
-  return apiSuccess({
+  const responseBody = {
     data: {
       order_id: result.orderId,
       payment_intent_id: paymentIntent.id,
@@ -147,5 +162,9 @@ export async function POST(req: NextRequest) {
       status: 'paid',
     },
     note: 'Charged off-session against the saved card. No human interaction was required.',
-  }, 201)
+  }
+
+  await storeIdempotency(req, user.profile_id, '/api/v1/checkout/charge', 201, responseBody, db)
+
+  return apiSuccess(responseBody, 201)
 }

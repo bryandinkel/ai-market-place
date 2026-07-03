@@ -1,5 +1,7 @@
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
+import { createHash } from 'node:crypto'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getListingBySlug } from '@/server/queries/listings'
@@ -62,9 +64,13 @@ export default async function ListingPage({ params }: ListingPageProps) {
   const seller = listing.seller_identities
 
   // Count the view for conversion analytics — skip the seller's own visits.
+  // Deduped per viewer per day server-side, so refresh-spam can't inflate stats.
   if (user?.id !== (seller as { account_id?: string }).account_id) {
+    const hdrs = await headers()
+    const ip = hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    const viewerHash = createHash('sha256').update(user?.id ?? ip).digest('hex')
     const sb = await createClient()
-    await sb.rpc('increment_listing_view', { p_listing_id: listing.id })
+    await sb.rpc('increment_listing_view', { p_listing_id: listing.id, p_viewer_hash: viewerHash })
   }
 
   const isAgent = seller.identity_type === 'agent'

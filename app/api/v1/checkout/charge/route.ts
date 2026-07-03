@@ -87,16 +87,26 @@ export async function POST(req: NextRequest) {
       'Use POST /v1/checkout to pay in a browser once; the card is then reusable off-session.', '/developers', 402)
   }
 
-  // Find a usable payment method (default, else most recent card)
+  // Find a usable payment method (default, else most recent card), and grab
+  // the customer's address for tax calculation while we're at it.
   let paymentMethodId: string | null = null
+  let customerAddress: Record<string, string | null> | null = null
   try {
     const customer = await stripe.customers.retrieve(customerId)
     if (customer && !('deleted' in customer)) {
       paymentMethodId = (customer.invoice_settings?.default_payment_method as string) ?? null
+      customerAddress = (customer.address as Record<string, string | null> | null)
+        ?? (customer.shipping?.address as Record<string, string | null> | null)
+        ?? null
     }
     if (!paymentMethodId) {
       const pms = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 1 })
       paymentMethodId = pms.data[0]?.id ?? null
+      // Card billing address works for tax when the customer has none on file
+      if (!customerAddress) {
+        const billing = pms.data[0]?.billing_details?.address
+        if (billing?.country) customerAddress = billing as unknown as Record<string, string | null>
+      }
     }
   } catch (err) {
     console.error('charge: failed to resolve payment method', err)
@@ -107,12 +117,39 @@ export async function POST(req: NextRequest) {
       'Use POST /v1/checkout once to save a card.', '/developers', 402)
   }
 
+  // Calculate sales tax from the saved address (mirrors automatic_tax on the
+  // interactive checkout). If we can't determine an address, charge without
+  // tax rather than failing the purchase.
+  let taxCalculation: { id: string; amount_total: number } | null = null
+  if (customerAddress?.country) {
+    try {
+      const calc = await stripe.tax.calculations.create({
+        currency: 'usd',
+        line_items: [{ amount: price, reference: listing.id as string, tax_behavior: 'exclusive' }],
+        customer_details: {
+          address: {
+            country: customerAddress.country,
+            state: customerAddress.state ?? undefined,
+            city: customerAddress.city ?? undefined,
+            postal_code: customerAddress.postal_code ?? undefined,
+            line1: customerAddress.line1 ?? undefined,
+          },
+          address_source: 'billing',
+        },
+      })
+      taxCalculation = { id: calc.id!, amount_total: calc.amount_total }
+    } catch (err) {
+      console.error('charge: tax calculation failed, charging without tax', err)
+    }
+  }
+  const chargeAmount = taxCalculation?.amount_total ?? price
+
   // Charge off-session — Stripe's own idempotency layer backs up ours, so the
   // same key can never produce two PaymentIntents even on a race.
   let paymentIntent
   try {
     paymentIntent = await stripe.paymentIntents.create({
-      amount: price,
+      amount: chargeAmount,
       currency: 'usd',
       customer: customerId,
       payment_method: paymentMethodId,
@@ -139,14 +176,27 @@ export async function POST(req: NextRequest) {
       'Use POST /v1/checkout so the buyer can authenticate in a browser.', '/developers', 402)
   }
 
-  // Create the order via the shared, idempotent helper
+  // Record the tax transaction so Stripe Tax reporting stays accurate
+  if (taxCalculation) {
+    try {
+      await stripe.tax.transactions.createFromCalculation({
+        calculation: taxCalculation.id,
+        reference: paymentIntent.id,
+      })
+    } catch (err) {
+      console.error('charge: failed to record tax transaction', err)
+    }
+  }
+
+  // Create the order via the shared, idempotent helper. grossAmount matches
+  // the interactive flow, where session.amount_total is tax-inclusive.
   const result = await createMarketplaceOrder({
     buyerId: user.profile_id,
     sellerIdentityId: seller.id,
     listingId: listing.id as string,
     orderType: listing.listing_type as string,
     packageId: (package_id as string) || null,
-    grossAmount: price,
+    grossAmount: chargeAmount,
     stripePaymentIntentId: paymentIntent.id,
     apiKeyId: user.key_id,
   })
@@ -157,7 +207,9 @@ export async function POST(req: NextRequest) {
     data: {
       order_id: result.orderId,
       payment_intent_id: paymentIntent.id,
-      amount: price,
+      amount: chargeAmount,
+      subtotal: price,
+      tax: taxCalculation ? chargeAmount - price : 0,
       currency: 'usd',
       status: 'paid',
     },
